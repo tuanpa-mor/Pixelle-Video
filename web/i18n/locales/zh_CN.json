@@ -186,7 +186,7 @@
     "settings.llm.api_key": "API Key",
     "settings.llm.api_key_help": "填入您的 API Key",
     "settings.llm.base_url": "Base URL",
-    "settings.llm.base_url_help": "API 服务地址",
+    "settings.llm.base_url_help": "填写模型服务的 Base URL，不要填写具体接口路径。示例：OpenAI https://api.openai.com/v1 ，智谱 https://open.bigmodel.cn/api/paas/v4 。",
     "settings.llm.model": "Model",
     "settings.llm.model_help": "模型名称",
     "settings.llm.custom_model": "自定义...",

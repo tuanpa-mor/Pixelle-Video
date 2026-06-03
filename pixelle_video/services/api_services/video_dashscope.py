@@ -197,7 +197,32 @@ class DashscopeVideoClient:
 
         logger.info(f"DashscopeVideoClient: model={model}, prompt={prompt[:60]}...")
 
-        if self._is_reference_to_video_model(model):
+        if self._is_text_to_video_model(model):
+            call_kwargs = {
+                "api_key": self.api_key,
+                "model": model,
+                "prompt": prompt,
+                "duration": duration,
+                "watermark": watermark,
+            }
+            if negative_prompt:
+                call_kwargs["negative_prompt"] = negative_prompt
+            if resolution:
+                call_kwargs["resolution"] = resolution
+            if video_ratio:
+                call_kwargs["ratio"] = video_ratio
+            if prompt_extend is not None:
+                call_kwargs["prompt_extend"] = prompt_extend
+            if seed is not None:
+                call_kwargs["seed"] = seed
+            if audio is not None:
+                call_kwargs["audio"] = audio
+
+            rsp = self._with_network_retry(
+                "submit task",
+                lambda: VideoSynthesis.call(**call_kwargs),
+            )
+        elif self._is_reference_to_video_model(model):
             media = self._build_reference_to_video_media(
                 image_path=image_path,
                 reference_image_path=reference_image_path,
@@ -405,6 +430,10 @@ class DashscopeVideoClient:
     def _is_reference_to_video_model(self, model: str) -> bool:
         """Return True for DashScope reference-to-video model IDs."""
         return "r2v" in model.lower()
+
+    def _is_text_to_video_model(self, model: str) -> bool:
+        """Return True for DashScope text-to-video model IDs."""
+        return "t2v" in model.lower()
 
     def _extract_video_url(self, rsp) -> Optional[str]:
         """Extract video_url from DashScope SDK response variants."""

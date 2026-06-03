@@ -85,9 +85,9 @@ def render_single_output(pixelle_video, video_params):
             from pixelle_video.utils.template_util import get_template_type
             if frame_template and get_template_type(frame_template) == "video" and not workflow_key:
                 st.error(
-                    "请选择 API 视频生成模型后再生成。"
+                    "请选择视频生成工作流或 API 视频模型后再生成。"
                     if get_language() == "zh_CN"
-                    else "Please select an API video generation model before generating."
+                    else "Please select a video workflow or API video model before generating."
                 )
                 st.stop()
             

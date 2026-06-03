@@ -158,6 +158,7 @@ class VideoClient:
                 mode,
                 cfg_scale,
                 negative_prompt or "",
+                video_ratio,
             )
         elif "seedance" in model_lower:
             return self._generate_seedance(
@@ -257,6 +258,7 @@ class VideoClient:
         mode: str = "pro",
         cfg_scale: float = 0.5,
         negative_prompt: str = "",
+        video_ratio: str = "16:9",
     ) -> str:
         """通过可灵模型生成视频"""
         logger.info(f"VideoClient: 路由至可灵 model={model}")
@@ -270,6 +272,7 @@ class VideoClient:
             mode=mode,
             cfg_scale=cfg_scale,
             negative_prompt=negative_prompt,
+            aspect_ratio=video_ratio,
         )
 
     def _generate_seedance(

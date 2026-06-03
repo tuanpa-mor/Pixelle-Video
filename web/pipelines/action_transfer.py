@@ -1,4 +1,3 @@
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,11 @@ from web.pipelines.base import PipelineUI, register_pipeline_ui
 from web.pipelines.api_workflows import (
     is_api_workflow,
     list_api_media_workflows,
+    list_local_media_workflows,
     render_api_video_controls,
+    workflow_select_help,
+    workflow_source_help,
+    workflow_source_label,
 )
 from web.components.content_input import render_version_info
 from web.utils.async_helpers import run_async
@@ -176,25 +179,19 @@ class ActionTransferPipelineUI(PipelineUI):
                 st.info(tr("action_transfer.assets.image_empty_hint"))
             
             def list_action_transfer_workflows():
-                result = []
-                for source in ("runninghub", "selfhost"):
-                    dir_path = os.path.join("workflows", source)
-                    if not os.path.isdir(dir_path):
-                        continue
-                    for fname in os.listdir(dir_path):
-                        if fname.startswith("af_") and fname.endswith(".json"):
-                            display = f"{fname} - {'Runninghub' if source == 'runninghub' else 'Selfhost'}"
-                            result.append({
-                                "key": f"{source}/{fname}",
-                                "display_name": display
-                            })
-                result.extend(list_api_media_workflows(
+                if workflow_source == "api":
+                    return list_api_media_workflows(
+                        pixelle_video,
+                        "video",
+                        required_adapter_abilities=["action_transfer"],
+                        verified_only=True,
+                    )
+                return list_local_media_workflows(
                     pixelle_video,
                     "video",
-                    required_adapter_abilities=["action_transfer"],
-                    verified_only=True,
-                ))
-                return result
+                    workflow_source,
+                    key_prefix="af_",
+                )
             
             prompt_text = st.text_area(
                         tr("action_transfer.input_text"),
@@ -203,10 +200,49 @@ class ActionTransferPipelineUI(PipelineUI):
                         help=tr("input.text_help_audio"),
                         key="prompt_box"
                         )
+
+            source_options = []
+            if list_local_media_workflows(pixelle_video, "video", "runninghub", key_prefix="af_"):
+                source_options.append("runninghub")
+            if list_local_media_workflows(pixelle_video, "video", "selfhost", key_prefix="af_"):
+                source_options.append("selfhost")
+            if list_api_media_workflows(
+                pixelle_video,
+                "video",
+                required_adapter_abilities=["action_transfer"],
+                verified_only=True,
+            ):
+                source_options.append("api")
+
+            if not source_options:
+                source_options = ["runninghub"]
+                st.warning(
+                    "没有找到可用的动作迁移工作流或 API 模型。"
+                    if get_language() == "zh_CN"
+                    else "No available action-transfer workflow or API model was found."
+                )
+
+            source_key = "action_transfer_workflow_source"
+            if st.session_state.get(source_key) not in source_options:
+                st.session_state.pop(source_key, None)
+
+            workflow_source = st.radio(
+                "生成来源" if get_language() == "zh_CN" else "Generation source",
+                source_options,
+                format_func=workflow_source_label,
+                horizontal=True,
+                key=source_key,
+                help=workflow_source_help("动作迁移" if get_language() == "zh_CN" else "action transfer"),
+            )
             
             transfer_workflows = list_action_transfer_workflows()
-            has_api_action_transfer = any(is_api_workflow(wf["key"]) for wf in transfer_workflows)
-            if not has_api_action_transfer:
+            if workflow_source != "api" and not transfer_workflows:
+                st.warning(
+                    "当前来源下没有动作迁移工作流（需要 af_*.json）。"
+                    if get_language() == "zh_CN"
+                    else "No action-transfer workflow is available for this source (requires af_*.json)."
+                )
+            if workflow_source == "api" and not transfer_workflows:
                 st.caption(
                     "当前已接入的 API 视频模型没有已验证的动作迁移数据契约，暂不展示 API 模型。"
                     if get_language() == "zh_CN"
@@ -220,8 +256,9 @@ class ActionTransferPipelineUI(PipelineUI):
                 tr("action_transfer.workflow_select"),
                 workflow_options if workflow_options else ["No workflow found"],
                 index=default_workflow_index,
-                label_visibility="collapsed",
-                key="action_transfer_workflow_select"
+                label_visibility="visible",
+                key="action_transfer_workflow_select",
+                help=workflow_select_help(),
             )
 
             if workflow_options:
@@ -233,7 +270,7 @@ class ActionTransferPipelineUI(PipelineUI):
                 workflow_info = None
             
             # Check and warn for selfhost workflow (auto popup if not confirmed)
-            if not is_api_workflow(workflow_key):
+            if workflow_key and not is_api_workflow(workflow_key):
                 check_and_warn_selfhost_workflow(workflow_key)
 
             api_video_params = render_api_video_controls(

@@ -1,6 +1,6 @@
 """
 可灵（Kling AI）视频生成客户端
-基于可灵 API 的图生视频功能 (image2video)
+基于可灵 API 的文生视频 (text2video) / 图生视频 (image2video) 功能
 支持模型: kling-v3, kling-v2-6, kling-v2-5-turbo
 """
 
@@ -58,8 +58,8 @@ def _proxy_dict(local_proxy: Optional[str]) -> dict:
 
 class KlingVideoClient:
     """
-    可灵 AI 图生视频客户端
-    使用 JWT (HMAC-SHA256) 鉴权，调用 /v1/videos/image2video 接口
+    可灵 AI 视频生成客户端
+    使用 JWT (HMAC-SHA256) 鉴权，调用 /v1/videos/text2video 或 /v1/videos/image2video 接口
     """
 
     def __init__(
@@ -152,7 +152,7 @@ class KlingVideoClient:
 
     def _submit_task(
         self,
-        image_path: str,
+        image_path: Optional[str],
         prompt: str = "",
         negative_prompt: str = "",
         model_name: str = "kling-v3",
@@ -160,12 +160,12 @@ class KlingVideoClient:
         duration: str = "5",
         cfg_scale: float = 0.5,
         sound: str = "",
+        aspect_ratio: str = "16:9",
     ) -> str:
-        """
-        提交图生视频任务
+        """提交文生视频或图生视频任务。
 
         Args:
-            image_path: 本地图片路径
+            image_path: 本地图片路径；为空时调用文生视频接口
             prompt: 正向提示词（≤2500字符）
             negative_prompt: 负向提示词（≤2500字符）
             model_name: 可灵模型名 (kling-v3 / kling-v2-6 / kling-v2-5-turbo)
@@ -173,11 +173,12 @@ class KlingVideoClient:
             duration: 视频时长，v3: "3"~"15", v2: "5"或"10"
             cfg_scale: 自由度 [0,1]，越大越贴合提示词
             sound: 是否生成声音 "on"/"off"
+            aspect_ratio: 文生视频画幅比例
 
         Returns:
             task_id: 任务 ID
         """
-        if not os.path.exists(image_path):
+        if image_path and not os.path.exists(image_path):
             raise FileNotFoundError(f"输入图片不存在: {image_path}")
 
         # 根据模型系列确定 duration 范围
@@ -190,16 +191,19 @@ class KlingVideoClient:
             clamped = str(min(max(int(duration), 3), 15))
         else:
             # v2 系列仅支持 5 或 10
-            clamped = str(min(max(int(duration), 5), 10))
-
-        image_b64 = self._encode_image(image_path)
+            clamped = "10" if int(duration) >= 8 else "5"
 
         body = {
             "model_name": model_name,
-            "image": image_b64,
             "mode": mode,
             "duration": clamped,
         }
+        endpoint = "image2video"
+        if image_path:
+            body["image"] = self._encode_image(image_path)
+        else:
+            endpoint = "text2video"
+            body["aspect_ratio"] = aspect_ratio
 
         # sound 参数处理
         # v3 / v2-6: 默认开启声音，除非显式 sound="off"
@@ -223,10 +227,13 @@ class KlingVideoClient:
         if negative_prompt:
             body["negative_prompt"] = negative_prompt
 
-        url = f"{self.base_url}/v1/videos/image2video"
+        url = f"{self.base_url}/v1/videos/{endpoint}"
         headers = self._auth_headers()
 
-        logger.info(f"KlingVideoClient: 提交任务 model={model_name}, mode={mode}, duration={clamped}s, sound={body.get('sound', 'off')}")
+        logger.info(
+            f"KlingVideoClient: 提交{endpoint}任务 model={model_name}, "
+            f"mode={mode}, duration={clamped}s, sound={body.get('sound', 'off')}"
+        )
 
         resp = self._session.post(
             url,
@@ -255,14 +262,14 @@ class KlingVideoClient:
 
     # ─── 查询任务 ───
 
-    def _query_task(self, task_id: str) -> dict:
+    def _query_task(self, task_id: str, endpoint: str = "image2video") -> dict:
         """
         查询单个任务状态
 
         Returns:
             API 响应中的 data 字段
         """
-        url = f"{self.base_url}/v1/videos/image2video/{task_id}"
+        url = f"{self.base_url}/v1/videos/{endpoint}/{task_id}"
         headers = self._auth_headers()
 
         resp = self._session.get(
@@ -283,7 +290,7 @@ class KlingVideoClient:
 
     # ─── 轮询等待 ───
 
-    def _poll_until_done(self, task_id: str) -> dict:
+    def _poll_until_done(self, task_id: str, endpoint: str = "image2video") -> dict:
         """
         轮询任务直到完成或失败
 
@@ -295,7 +302,7 @@ class KlingVideoClient:
             TimeoutError: 超过最大轮询次数
         """
         for attempt in range(self.max_polls):
-            result = self._query_task(task_id)
+            result = self._query_task(task_id, endpoint=endpoint)
             status = result.get("task_status", "")
 
             if status == "succeed":
@@ -337,7 +344,7 @@ class KlingVideoClient:
     def generate_video(
         self,
         prompt: str,
-        image_path: str,
+        image_path: Optional[str],
         save_path: str,
         model: str = "kling-v3",
         duration: int = 5,
@@ -345,13 +352,14 @@ class KlingVideoClient:
         cfg_scale: float = 0.5,
         negative_prompt: str = "",
         sound: str = "",
+        aspect_ratio: str = "16:9",
     ) -> str:
         """
-        图生视频完整流程：提交任务 → 轮询等待 → 下载视频
+        文生/图生视频完整流程：提交任务 → 轮询等待 → 下载视频
 
         Args:
             prompt: 视频描述提示词
-            image_path: 输入图片本地路径
+            image_path: 输入图片本地路径；为空时调用文生视频
             save_path: 输出视频保存路径
             model: 可灵模型名 (kling-v3 / kling-v2-6 / kling-v2-5-turbo)
             duration: 视频时长(秒)，v3: 3~15, v2: 5或10
@@ -359,11 +367,13 @@ class KlingVideoClient:
             cfg_scale: 自由度 [0,1]
             negative_prompt: 负向提示词
             sound: 是否生成声音 "on"/"off"
+            aspect_ratio: 文生视频画幅比例
 
         Returns:
             video_url: 远端视频 URL
         """
         # 1. 提交任务
+        endpoint = "image2video" if image_path else "text2video"
         task_id = self._submit_task(
             image_path=image_path,
             prompt=prompt,
@@ -373,10 +383,11 @@ class KlingVideoClient:
             duration=str(duration),
             cfg_scale=cfg_scale,
             sound=sound,
+            aspect_ratio=aspect_ratio,
         )
 
         # 2. 轮询等待
-        result = self._poll_until_done(task_id)
+        result = self._poll_until_done(task_id, endpoint=endpoint)
 
         # 3. 提取视频 URL
         videos = result.get("task_result", {}).get("videos", [])

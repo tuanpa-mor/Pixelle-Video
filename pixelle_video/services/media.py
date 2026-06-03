@@ -108,11 +108,12 @@ class MediaService(ComfyBaseService):
         return sorted(workflows, key=lambda w: w["key"])
 
     def list_workflows(self) -> list[dict]:
-        """List Comfy workflows plus direct API provider models."""
-        workflows = super().list_workflows()
-        if self.core and getattr(self.core, "api_media", None):
-            workflows.extend(self.core.api_media.list_workflows())
-        return sorted(workflows, key=lambda w: w["key"])
+        """List Comfy/RunningHub/Selfhost workflows only.
+
+        Direct provider models are exposed through core.api_media.list_workflows()
+        so UI code can keep local workflows and API models in separate selectors.
+        """
+        return super().list_workflows()
     
     async def __call__(
         self,

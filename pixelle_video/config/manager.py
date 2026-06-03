@@ -116,10 +116,12 @@ class ConfigManager:
     
     def set_llm_config(self, api_key: str, base_url: str, model: str):
         """Set LLM configuration"""
+        from pixelle_video.utils.llm_util import normalize_openai_base_url
+
         self.update({
             "llm": {
                 "api_key": api_key,
-                "base_url": base_url,
+                "base_url": normalize_openai_base_url(base_url),
                 "model": model,
             }
         })

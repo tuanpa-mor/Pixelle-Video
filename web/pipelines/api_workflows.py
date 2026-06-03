@@ -1,5 +1,6 @@
 """Helpers for exposing direct API media models in Streamlit pipeline UIs."""
 
+import os
 from typing import Any
 
 import streamlit as st
@@ -11,6 +12,114 @@ from web.i18n import get_language
 def is_api_workflow(workflow_key: str | None) -> bool:
     """Return True for direct provider workflow keys such as api/dashscope/xxx."""
     return bool(workflow_key and workflow_key.startswith("api/"))
+
+
+def is_source_workflow(workflow: dict, source: str) -> bool:
+    """Return True when a workflow belongs to a concrete source namespace."""
+    key = workflow.get("key") or workflow.get("path") or ""
+    return key.startswith(f"{source}/") or workflow.get("source") == source
+
+
+def workflow_source_label(source: str) -> str:
+    """Human-facing label for workflow source selectors."""
+    zh = get_language() == "zh_CN"
+    labels = {
+        "selfhost": "本地 ComfyUI" if zh else "Local ComfyUI",
+        "runninghub": "RunningHub",
+        "api": "API 模型" if zh else "API models",
+    }
+    return labels.get(source, source)
+
+
+def workflow_source_help(subject: str | None = None) -> str:
+    """Common help text for workflow/model source selectors."""
+    zh = get_language() == "zh_CN"
+    subject_text = subject or ("当前步骤" if zh else "this step")
+    if zh:
+        return (
+            f"选择{subject_text}使用的模型服务来源："
+            "RunningHub 使用云端工作流；本地 ComfyUI 使用 selfhost 工作流；"
+            "API 调用直接请求模型供应商。选择后，下方列表只显示该来源下可用的工作流或模型。"
+        )
+    return (
+        f"Choose the model service source for {subject_text}: "
+        "RunningHub uses cloud workflows; Local ComfyUI uses selfhost workflows; "
+        "API call directly requests model providers. The list below only shows workflows or models from the selected source."
+    )
+
+
+def workflow_select_help() -> str:
+    """Common help text for workflow/model select boxes."""
+    if get_language() == "zh_CN":
+        return "这里只显示上方所选模型服务来源下可用的工作流或模型。"
+    return "Only workflows or models from the selected model service source are shown here."
+
+
+def list_local_media_workflows(
+    pixelle_video: Any,
+    media_type: str,
+    source: str,
+    key_contains: str | None = None,
+    key_prefix: str | None = None,
+) -> list[dict]:
+    """List non-API media workflows by source without mixing provider models."""
+    try:
+        workflows = []
+        seen_keys = set()
+        for workflow in pixelle_video.media.list_workflows():
+            key = workflow.get("key") or workflow.get("path") or ""
+            if not key or key.startswith("api/"):
+                continue
+            if not is_source_workflow(workflow, source):
+                continue
+            if key_contains and key_contains.lower() not in key.lower():
+                continue
+            if key_prefix:
+                fname = os.path.basename(key)
+                if not fname.startswith(key_prefix):
+                    continue
+            workflow_media_type = workflow.get("media_type")
+            if media_type == "video":
+                if workflow_media_type and workflow_media_type != "video":
+                    continue
+                if not workflow_media_type and "video_" not in key.lower() and not (key_prefix and os.path.basename(key).startswith(key_prefix)):
+                    continue
+            elif workflow_media_type and workflow_media_type != media_type:
+                continue
+            elif media_type == "image" and "video_" in key.lower():
+                continue
+            seen_keys.add(key)
+            workflows.append({
+                "key": key,
+                "display_name": workflow.get("display_name") or key,
+                **workflow,
+            })
+
+        if key_prefix:
+            try:
+                from pixelle_video.utils.os_util import get_resource_path, list_resource_files
+
+                for filename in list_resource_files("workflows", source):
+                    if not filename.startswith(key_prefix) or not filename.endswith(".json"):
+                        continue
+                    key = f"{source}/{filename}"
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    workflows.append({
+                        "key": key,
+                        "name": filename,
+                        "display_name": f"{filename} - {source.title()}",
+                        "source": source,
+                        "path": get_resource_path("workflows", source, filename),
+                        "media_type": media_type,
+                    })
+            except Exception as exc:
+                logger.warning(f"Failed to list {source}/{key_prefix} workflows from files: {exc}")
+        return workflows
+    except Exception as exc:
+        logger.warning(f"Failed to list {source} {media_type} workflows: {exc}")
+        return []
 
 
 def list_api_media_workflows(

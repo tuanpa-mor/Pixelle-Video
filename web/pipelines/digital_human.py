@@ -8,7 +8,13 @@ from loguru import logger
 import httpx
 from web.i18n import tr, get_language
 from web.pipelines.base import PipelineUI, register_pipeline_ui
-from web.pipelines.api_workflows import list_api_media_workflows, render_api_video_controls
+from web.pipelines.api_workflows import (
+    list_api_media_workflows,
+    render_api_video_controls,
+    workflow_select_help,
+    workflow_source_help,
+    workflow_source_label,
+)
 from web.components.content_input import render_version_info
 from web.components.digital_tts_config import render_style_config
 from web.utils.async_helpers import run_async
@@ -132,7 +138,8 @@ class DigitalHumanPipelineUI(PipelineUI):
             
             source_options = {
                 "runninghub": tr("asset_based.source.runninghub"),
-                "selfhost": tr("asset_based.source.selfhost")
+                "selfhost": tr("asset_based.source.selfhost"),
+                "api": workflow_source_label("api"),
             }
             
             # Check if RunningHub API key is configured
@@ -140,99 +147,175 @@ class DigitalHumanPipelineUI(PipelineUI):
             has_runninghub = bool(comfyui_config.get("runninghub_api_key"))
             has_selfhost = bool(comfyui_config.get("comfyui_url"))
             
-            # Default to runninghub always
-            default_source_index = 0
-            
-            source = st.radio(
-                tr("asset_based.source.select"),
-                options=list(source_options.keys()),
-                format_func=lambda x: source_options[x],
-                index=default_source_index,
-                horizontal=True,
-                key="digital_human_workflow_source",
-                label_visibility="collapsed"
-            )
-            
-            # Initialize workflow_config with default value based on source selection
-            # This ensures the variable is always defined even if the backend is not configured
-            if source == "runninghub":
-                workflow_config = {
-                    "first_workflow_path": "workflows/runninghub/digital_image.json",
-                    "second_workflow_path": "workflows/runninghub/digital_combination.json",
-                    "third_workflow_path": "workflows/runninghub/digital_customize.json"
-                }
-                if not has_runninghub:
-                    st.warning(tr("asset_based.source.runninghub_not_configured"))
-                else:
-                    st.info(tr("asset_based.source.runninghub_hint"))
-            else:
-                workflow_config = {
-                    "first_workflow_path": "workflows/selfhost/digital_image.json",
-                    "second_workflow_path": "workflows/selfhost/digital_combination.json",
-                    "third_workflow_path": "workflows/selfhost/digital_customize.json"
-                }
-                if not has_selfhost:
-                    st.warning(tr("asset_based.source.selfhost_not_configured"))
-                else:
-                    st.info(tr("asset_based.source.selfhost_hint"))
-                    
-                    # Check and warn for selfhost workflows (auto popup if not confirmed)
-                    # Warn for the first workflow as representative
-                    # TODO: need to check if the workflow is valid
-                    # check_and_warn_selfhost_workflow("selfhost/digital_image.json")
+            workflow_config = {
+                "first_workflow_path": "workflows/runninghub/digital_image.json",
+                "second_workflow_path": "workflows/runninghub/digital_combination.json",
+                "third_workflow_path": "workflows/runninghub/digital_customize.json",
+            }
+
+            def digital_image_workflows(source_name: str) -> list[dict]:
+                first_path = Path("workflows") / source_name / "digital_image.json"
+                third_path = Path("workflows") / source_name / "digital_customize.json"
+                if not first_path.exists() or not third_path.exists():
+                    return []
+                return [
+                    {
+                        "key": f"{source_name}/digital_image.json",
+                        "display_name": f"digital_image.json - {source_name.title()}",
+                        "first_workflow_path": str(first_path),
+                        "third_workflow_path": str(third_path),
+                    }
+                ]
+
+            def digital_video_workflows(source_name: str) -> list[dict]:
+                second_path = Path("workflows") / source_name / "digital_combination.json"
+                if not second_path.exists():
+                    return []
+                return [
+                    {
+                        "key": f"{source_name}/digital_combination.json",
+                        "display_name": f"digital_combination.json - {source_name.title()}",
+                        "second_workflow_path": str(second_path),
+                    }
+                ]
 
             api_image_workflows = list_api_media_workflows(pixelle_video, "image")
-            api_image_options = ["使用原工作流生成图片" if get_language() == "zh_CN" else "Use original image workflow"]
-            api_image_options.extend([wf["display_name"] for wf in api_image_workflows])
-
-            selected_api_image = st.selectbox(
-                "API 图片生成模型" if get_language() == "zh_CN" else "API image generation model",
-                api_image_options,
-                index=0,
-                help=(
-                    "可选：在 digital 模式下用 API 图像模型替代前置商品/人物图片生成，后续数字人视频合成仍使用原工作流。"
-                    if get_language() == "zh_CN"
-                    else "Optional: replace the first digital-mode image generation step with an API image model. The talking-video synthesis still uses the original workflow."
-                ),
-                key="digital_human_api_image_workflow",
-            )
+            image_source_options = []
+            if digital_image_workflows("runninghub"):
+                image_source_options.append("runninghub")
+            if digital_image_workflows("selfhost"):
+                image_source_options.append("selfhost")
+            if api_image_workflows:
+                image_source_options.append("api")
 
             workflow_config["api_image_workflow"] = None
-            if selected_api_image != api_image_options[0] and api_image_workflows:
-                selected_index = api_image_options.index(selected_api_image) - 1
-                workflow_config["api_image_workflow"] = api_image_workflows[selected_index]["key"]
+            if st.session_state.get("digital_human_image_service_source") not in image_source_options:
+                st.session_state.pop("digital_human_image_service_source", None)
+            image_service_source = st.radio(
+                "前置图片生成服务" if get_language() == "zh_CN" else "Pre-image generation service",
+                image_source_options,
+                format_func=lambda x: source_options[x],
+                horizontal=True,
+                key="digital_human_image_service_source",
+                help=workflow_source_help("前置图片生成" if get_language() == "zh_CN" else "pre-image generation"),
+            )
 
+            image_workflows = []
+            if image_service_source in {"runninghub", "selfhost"}:
+                if image_service_source == "runninghub" and not has_runninghub:
+                    st.warning(tr("asset_based.source.runninghub_not_configured"))
+                if image_service_source == "selfhost" and not has_selfhost:
+                    st.warning(tr("asset_based.source.selfhost_not_configured"))
+
+                image_workflows = digital_image_workflows(image_service_source)
+            elif image_service_source == "api":
+                if not api_image_workflows:
+                    st.warning(
+                        "没有找到 API 图片模型，请先配置图像模型提供商。"
+                        if get_language() == "zh_CN"
+                        else "No API image model found. Configure an image provider first."
+                    )
+                else:
+                    image_workflows = api_image_workflows
+
+            image_options = [wf["display_name"] for wf in image_workflows]
+            selected_image_workflow = st.selectbox(
+                "前置图片工作流/模型" if get_language() == "zh_CN" else "Pre-image workflow/model",
+                image_options if image_options else ["No workflow/model available"],
+                index=0,
+                key="digital_human_image_workflow",
+                disabled=not image_options,
+                help=workflow_select_help(),
+            )
+            if image_options:
+                selected_index = image_options.index(selected_image_workflow)
+                selected_workflow = image_workflows[selected_index]
+                if image_service_source == "api":
+                    workflow_config["api_image_workflow"] = selected_workflow["key"]
+                else:
+                    workflow_config["first_workflow_path"] = selected_workflow["first_workflow_path"]
+                    workflow_config["third_workflow_path"] = selected_workflow["third_workflow_path"]
+
+            workflow_config["api_video_workflow"] = None
+            workflow_config["api_video_params"] = {}
             api_video_workflows = list_api_media_workflows(
                 pixelle_video,
                 "video",
                 required_adapter_abilities=["digital_human"],
                 verified_only=True,
             )
-            api_video_options = ["使用原工作流合成口播视频" if get_language() == "zh_CN" else "Use original talking-video workflow"]
-            api_video_options.extend([wf["display_name"] for wf in api_video_workflows])
+            video_source_options = []
+            if digital_video_workflows("runninghub"):
+                video_source_options.append("runninghub")
+            if digital_video_workflows("selfhost"):
+                video_source_options.append("selfhost")
+            if api_video_workflows:
+                video_source_options.append("api")
 
-            selected_api_video = st.selectbox(
-                "API 参考生视频模型" if get_language() == "zh_CN" else "API reference-to-video model",
-                api_video_options,
-                index=0,
-                help=(
-                    "可选：用 DashScope 参考生视频模型直接生成数字人口播成片，跳过原第二步数字人视频合成 workflow。"
-                    if get_language() == "zh_CN"
-                    else "Optional: use a DashScope reference-to-video model to generate the talking video directly, bypassing the original second-step talking-video workflow."
-                ),
-                key="digital_human_api_video_workflow",
+            if st.session_state.get("digital_human_video_service_source") not in video_source_options:
+                st.session_state.pop("digital_human_video_service_source", None)
+            video_service_source = st.radio(
+                "口播视频合成服务" if get_language() == "zh_CN" else "Talking-video synthesis service",
+                video_source_options,
+                format_func=lambda x: source_options[x],
+                horizontal=True,
+                key="digital_human_video_service_source",
+                help=workflow_source_help("口播视频合成" if get_language() == "zh_CN" else "talking-video synthesis"),
             )
 
-            workflow_config["api_video_workflow"] = None
-            workflow_config["api_video_params"] = {}
-            if selected_api_video != api_video_options[0] and api_video_workflows:
-                selected_index = api_video_options.index(selected_api_video) - 1
-                selected_workflow = api_video_workflows[selected_index]
-                workflow_config["api_video_workflow"] = selected_workflow["key"]
-                workflow_config["api_video_params"] = render_api_video_controls(
-                    selected_workflow,
-                    key_prefix="digital_human",
-                    default_duration=5,
+            video_workflows = []
+            if video_service_source in {"runninghub", "selfhost"}:
+                if video_service_source == "runninghub" and not has_runninghub:
+                    st.warning(tr("asset_based.source.runninghub_not_configured"))
+                if video_service_source == "selfhost" and not has_selfhost:
+                    st.warning(tr("asset_based.source.selfhost_not_configured"))
+
+                video_workflows = digital_video_workflows(video_service_source)
+            elif video_service_source == "api":
+                if not api_video_workflows:
+                    st.warning(
+                        "没有找到已验证的 API 参考生视频模型，请先配置 DashScope 等提供商。"
+                        if get_language() == "zh_CN"
+                        else "No verified API reference-to-video model found. Configure a provider first."
+                    )
+                else:
+                    video_workflows = api_video_workflows
+
+            video_options = [wf["display_name"] for wf in video_workflows]
+            selected_video_workflow = st.selectbox(
+                "口播视频工作流/模型" if get_language() == "zh_CN" else "Talking-video workflow/model",
+                video_options if video_options else ["No workflow/model available"],
+                index=0,
+                key="digital_human_video_workflow",
+                disabled=not video_options,
+                help=workflow_select_help(),
+            )
+            if video_options:
+                selected_index = video_options.index(selected_video_workflow)
+                selected_workflow = video_workflows[selected_index]
+                if video_service_source == "api":
+                    workflow_config["api_video_workflow"] = selected_workflow["key"]
+                    workflow_config["api_video_params"] = render_api_video_controls(
+                        selected_workflow,
+                        key_prefix="digital_human",
+                        default_duration=5,
+                    )
+                else:
+                    workflow_config["second_workflow_path"] = selected_workflow["second_workflow_path"]
+
+            missing_workflows = [
+                path for key, path in workflow_config.items()
+                if key.endswith("_workflow_path") and isinstance(path, str) and not Path(path).exists()
+            ]
+            if missing_workflows:
+                st.warning(
+                    (
+                        "当前选择缺少数字人口播工作流文件："
+                        + "、".join(missing_workflows)
+                    )
+                    if get_language() == "zh_CN"
+                    else "The current selection is missing digital-human workflow files: "
+                    + ", ".join(missing_workflows)
                 )
 
             return workflow_config

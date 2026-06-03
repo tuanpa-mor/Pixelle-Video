@@ -47,7 +47,7 @@ class SeedanceVideoClient:
     def generate_video(
         self,
         prompt: str,
-        image_path: str,
+        image_path: Optional[str],
         save_path: str,
         model: str = "doubao-seedance-2-0-260128",
         duration: int = 5,
@@ -58,7 +58,7 @@ class SeedanceVideoClient:
 
         Args:
             prompt: 提示词
-            image_path: 输入图片本地路径
+            image_path: 输入图片本地路径；为空时走文生视频
             save_path: 输出视频保存路径
             model: 模型名称
             duration: 视频时长
@@ -77,18 +77,9 @@ class SeedanceVideoClient:
         
         return video_url
 
-    def _submit_task(self, prompt: str, image_path: str, model: str, duration: int, **kwargs) -> str:
+    def _submit_task(self, prompt: str, image_path: Optional[str], model: str, duration: int, **kwargs) -> str:
         # 根据 Seedance 2.0 文档更新接口路径
         url = f"{self.base_url}/contents/generations/tasks"
-        
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"输入图片不存在: {image_path}")
-            
-        with open(image_path, "rb") as f:
-            img_data = base64.b64encode(f.read()).decode("utf-8")
-        ext = os.path.splitext(image_path)[1].lower()
-        mime = "image/png" if ext == ".png" else "image/jpeg"
-        image_base64 = f"data:{mime};base64,{img_data}"
 
         # 构建 content 数组
         content = []
@@ -97,15 +88,25 @@ class SeedanceVideoClient:
                 "type": "text",
                 "text": prompt
             })
-        
-        # 图生视频-首帧
-        content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": image_base64
-            },
-            "role": "first_frame"
-        })
+
+        if image_path:
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"输入图片不存在: {image_path}")
+
+            with open(image_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            ext = os.path.splitext(image_path)[1].lower()
+            mime = "image/png" if ext == ".png" else "image/jpeg"
+            image_base64 = f"data:{mime};base64,{img_data}"
+
+            # 图生视频-首帧
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": image_base64
+                },
+                "role": "first_frame"
+            })
 
         payload = {
             "model": model,

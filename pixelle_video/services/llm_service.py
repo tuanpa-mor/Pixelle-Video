@@ -337,4 +337,3 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text)."""
         model = self.active
         base_url = self._get_config_value("base_url", "default")
         return f"<LLMService model={model!r} base_url={base_url!r}>"
-

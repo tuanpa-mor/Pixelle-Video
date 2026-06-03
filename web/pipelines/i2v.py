@@ -1,4 +1,3 @@
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,11 @@ from web.pipelines.base import PipelineUI, register_pipeline_ui
 from web.pipelines.api_workflows import (
     is_api_workflow,
     list_api_media_workflows,
+    list_local_media_workflows,
     render_api_video_controls,
+    workflow_select_help,
+    workflow_source_help,
+    workflow_source_label,
 )
 from web.components.content_input import render_version_info
 from web.utils.async_helpers import run_async
@@ -68,25 +71,19 @@ class ImageToVideoPipelineUI(PipelineUI):
                 st.markdown(tr("i2v.assets.how"))
 
             def list_i2v_workflows():
-                result = []
-                for source in ("runninghub", "selfhost"):
-                    dir_path = os.path.join("workflows", source)
-                    if not os.path.isdir(dir_path):
-                        continue
-                    for fname in os.listdir(dir_path):
-                        if fname.startswith("i2v_") and fname.endswith(".json"):
-                            display = f"{fname} - {'Runninghub' if source == 'runninghub' else 'Selfhost'}"
-                            result.append({
-                                "key": f"{source}/{fname}",
-                                "display_name": display
-                            })
-                result.extend(list_api_media_workflows(
+                if workflow_source == "api":
+                    return list_api_media_workflows(
+                        pixelle_video,
+                        "video",
+                        required_adapter_abilities=["first_frame_i2v"],
+                        verified_only=True,
+                    )
+                return list_local_media_workflows(
                     pixelle_video,
                     "video",
-                    required_adapter_abilities=["first_frame_i2v"],
-                    verified_only=True,
-                ))
-                return result
+                    workflow_source,
+                    key_prefix="i2v_",
+                )
 
             # File uploader for multiple files
             uploaded_files = st.file_uploader(
@@ -133,8 +130,48 @@ class ImageToVideoPipelineUI(PipelineUI):
                         help=tr("input.text_help_audio"),
                         key="audio_box"
                         )
+
+            source_options = []
+            if list_local_media_workflows(pixelle_video, "video", "runninghub", key_prefix="i2v_"):
+                source_options.append("runninghub")
+            if list_local_media_workflows(pixelle_video, "video", "selfhost", key_prefix="i2v_"):
+                source_options.append("selfhost")
+            if list_api_media_workflows(
+                pixelle_video,
+                "video",
+                required_adapter_abilities=["first_frame_i2v"],
+                verified_only=True,
+            ):
+                source_options.append("api")
+
+            if not source_options:
+                source_options = ["runninghub"]
+                st.warning(
+                    "没有找到可用的图生视频工作流或 API 模型。"
+                    if get_language() == "zh_CN"
+                    else "No available image-to-video workflow or API model was found."
+                )
+
+            source_key = "i2v_workflow_source"
+            if st.session_state.get(source_key) not in source_options:
+                st.session_state.pop(source_key, None)
+
+            workflow_source = st.radio(
+                "生成来源" if get_language() == "zh_CN" else "Generation source",
+                source_options,
+                format_func=workflow_source_label,
+                horizontal=True,
+                key=source_key,
+                help=workflow_source_help("图生视频" if get_language() == "zh_CN" else "image-to-video"),
+            )
             
             i2v_workflows = list_i2v_workflows()
+            if workflow_source != "api" and not i2v_workflows:
+                st.warning(
+                    "当前来源下没有图生视频工作流（需要 i2v_*.json）。"
+                    if get_language() == "zh_CN"
+                    else "No image-to-video workflow is available for this source (requires i2v_*.json)."
+                )
             workflow_options = [wf["display_name"] for wf in i2v_workflows] 
             workflow_keys = [wf["key"] for wf in i2v_workflows]               
             default_workflow_index = 0
@@ -143,8 +180,9 @@ class ImageToVideoPipelineUI(PipelineUI):
                 tr("i2v.workflow_select"),
                 workflow_options if workflow_options else ["No workflow found"],
                 index=default_workflow_index,
-                label_visibility="collapsed",
-                key="i2v_workflow_select"
+                label_visibility="visible",
+                key="i2v_workflow_select",
+                help=workflow_select_help(),
             )
 
             if workflow_options:
@@ -156,7 +194,7 @@ class ImageToVideoPipelineUI(PipelineUI):
                 workflow_info = None
             
             # Check and warn for selfhost workflow (auto popup if not confirmed)
-            if not is_api_workflow(workflow_key):
+            if workflow_key and not is_api_workflow(workflow_key):
                 check_and_warn_selfhost_workflow(workflow_key)
 
             api_video_params = render_api_video_controls(

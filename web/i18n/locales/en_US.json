@@ -186,7 +186,7 @@
     "settings.llm.api_key": "API Key",
     "settings.llm.api_key_help": "Enter your API Key",
     "settings.llm.base_url": "Base URL",
-    "settings.llm.base_url_help": "API service address",
+    "settings.llm.base_url_help": "Enter the model service Base URL, not a concrete endpoint. Examples: OpenAI https://api.openai.com/v1 , Zhipu https://open.bigmodel.cn/api/paas/v4 .",
     "settings.llm.model": "Model",
     "settings.llm.model_help": "Model name",
     "settings.llm.custom_model": "Custom...",

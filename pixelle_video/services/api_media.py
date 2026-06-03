@@ -38,6 +38,8 @@ class APIProviderMediaService:
 
     VIDEO_MODELS = {
         "dashscope": [
+            "wan2.7-t2v",
+            "happyhorse-1.0-t2v",
             "wan2.7-i2v",
             "wan2.7-r2v",
             "wan2.7-videoedit",
@@ -60,6 +62,44 @@ class APIProviderMediaService:
     }
 
     VIDEO_MODEL_CAPABILITIES: dict[tuple[str, str], dict[str, Any]] = {
+        ("dashscope", "wan2.7-t2v"): {
+            "ability_type": "text_to_video",
+            "ability_types": ["text_to_video", "native_audio", "multi_shot"],
+            "adapter_ability_types": ["text_to_video", "native_audio"],
+            "input_modalities": ["text"],
+            "adapter_input_modalities": ["text"],
+            "duration": {"min": 2, "max": 15, "integer": True, "verified": True},
+            "resolutions": ["720P", "1080P"],
+            "ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "fps": 30,
+            "format": "mp4",
+            "api_contract_verified": True,
+            "source_urls": [
+                "https://help.aliyun.com/zh/model-studio/video-generate-edit-model/",
+                "https://help.aliyun.com/zh/model-studio/text-to-video-api-reference",
+            ],
+            "contract_issues": [
+                "Quick Create uses this model for direct text-to-video without generating a first-frame image.",
+            ],
+        },
+        ("dashscope", "happyhorse-1.0-t2v"): {
+            "ability_type": "text_to_video",
+            "ability_types": ["text_to_video", "native_audio"],
+            "adapter_ability_types": ["text_to_video", "native_audio"],
+            "input_modalities": ["text"],
+            "adapter_input_modalities": ["text"],
+            "duration": {"min": 3, "max": 15, "integer": True, "verified": True},
+            "resolutions": ["720P", "1080P"],
+            "fps": 24,
+            "format": "mp4",
+            "api_contract_verified": True,
+            "source_urls": [
+                "https://help.aliyun.com/zh/model-studio/video-generate-edit-model/",
+            ],
+            "contract_issues": [
+                "Quick Create uses this model for direct text-to-video without generating a first-frame image.",
+            ],
+        },
         ("dashscope", "wan2.7-i2v"): {
             "ability_type": "image_to_video",
             "ability_types": [
@@ -214,7 +254,7 @@ class APIProviderMediaService:
             ],
         },
         ("kling", "kling-v3"): {
-            "ability_type": "image_to_video",
+            "ability_type": "text_to_video",
             "ability_types": [
                 "text_to_video",
                 "image_to_video",
@@ -223,50 +263,64 @@ class APIProviderMediaService:
                 "multi_shot",
                 "element_reference",
             ],
-            "adapter_ability_types": ["first_frame_i2v", "native_audio"],
+            "adapter_ability_types": ["text_to_video", "first_frame_i2v", "native_audio"],
             "input_modalities": ["text", "image"],
             "adapter_input_modalities": ["text", "image"],
             "duration": {"min": 3, "max": 15, "integer": True, "verified": True},
             "resolutions": ["720P", "1080P"],
-            "api_contract_verified": False,
+            "ratios": ["16:9", "9:16", "1:1"],
+            "api_contract_verified": True,
             "source_urls": [
                 "https://app.klingai.com/cn/quickstart/klingai-video-3-model-user-guide",
+                "https://klingai.com/document-api/apiReference/model/textToVideo",
+                "https://klingai.com/document-api/apiReference/model/imageToVideo",
             ],
             "contract_issues": [
-                "Official product guide confirms model capabilities, but the public API parameter contract was not found in accessible official docs.",
-                "Current adapter only calls /v1/videos/image2video with one base64 image; start/end frames, element references and native audio are not exposed.",
+                "Adapter supports /v1/videos/text2video when image_path is empty and /v1/videos/image2video when image_path is provided.",
+                "Start/end frames and element references are listed as product capabilities but are not exposed by the current adapter.",
             ],
         },
         ("kling", "kling-v2-6"): {
-            "ability_type": "image_to_video",
+            "ability_type": "text_to_video",
             "ability_types": ["text_to_video", "image_to_video", "start_end_frame_i2v", "native_audio"],
-            "adapter_ability_types": ["first_frame_i2v", "native_audio"],
+            "adapter_ability_types": ["text_to_video", "first_frame_i2v", "native_audio"],
             "input_modalities": ["text", "image"],
             "adapter_input_modalities": ["text", "image"],
-            "api_contract_verified": False,
+            "duration": {"allowed_values": [5, 10], "integer": True, "verified": True},
+            "resolutions": ["720P", "1080P"],
+            "ratios": ["16:9", "9:16", "1:1"],
+            "api_contract_verified": True,
             "source_urls": [
                 "https://app.klingai.com/cn/quickstart/klingai-video-3-model-user-guide",
+                "https://klingai.com/document-api/apiReference/model/textToVideo",
+                "https://klingai.com/document-api/apiReference/model/imageToVideo",
             ],
             "contract_issues": [
-                "Official product guide lists capabilities, but accessible official API parameters for duration/mode/sound were not found.",
+                "Adapter supports /v1/videos/text2video when image_path is empty and /v1/videos/image2video when image_path is provided.",
             ],
         },
         ("kling", "kling-v2-5-turbo"): {
             "ability_type": "image_to_video",
-            "ability_types": ["image_to_video"],
-            "adapter_ability_types": ["first_frame_i2v", "native_audio"],
+            "ability_types": ["text_to_video", "image_to_video"],
+            "adapter_ability_types": ["text_to_video", "first_frame_i2v"],
             "input_modalities": ["text", "image"],
             "adapter_input_modalities": ["text", "image"],
-            "api_contract_verified": False,
-            "source_urls": [],
+            "duration": {"allowed_values": [5, 10], "integer": True, "verified": True},
+            "resolutions": ["720P", "1080P"],
+            "ratios": ["16:9", "9:16", "1:1"],
+            "api_contract_verified": True,
+            "source_urls": [
+                "https://klingai.com/document-api/apiReference/model/textToVideo",
+                "https://klingai.com/document-api/apiReference/model/imageToVideo",
+            ],
             "contract_issues": [
-                "Official accessible API/model contract was not found. Keep this model unverified until provider docs are supplied.",
+                "Adapter supports text-to-video and first-frame image-to-video. The current adapter intentionally omits sound for this model.",
             ],
         },
         ("seedance", "doubao-seedance-2-0-260128"): {
             "ability_type": "image_to_video",
             "ability_types": ["text_to_video", "image_to_video"],
-            "adapter_ability_types": ["first_frame_i2v", "native_audio"],
+            "adapter_ability_types": ["text_to_video", "first_frame_i2v", "native_audio"],
             "input_modalities": ["text", "image"],
             "adapter_input_modalities": ["text", "image"],
             "duration": {"min": 2, "max": 12, "integer": True, "verified": True},
@@ -278,13 +332,13 @@ class APIProviderMediaService:
                 "https://www.volcengine.com/docs/6492/2165104?lang=zh",
             ],
             "contract_issues": [
-                "Current adapter supports first_frame image-to-video plus ratio, resolution, seed, watermark and generate_audio. Additional multi-image/video roles are not exposed.",
+                "Current adapter supports text-to-video and first-frame image-to-video plus ratio, resolution, seed, watermark and generate_audio. Additional multi-image/video roles are not exposed.",
             ],
         },
         ("seedance", "doubao-seedance-2-0-fast-260128"): {
             "ability_type": "image_to_video",
             "ability_types": ["text_to_video", "image_to_video", "fast_generation"],
-            "adapter_ability_types": ["first_frame_i2v", "native_audio"],
+            "adapter_ability_types": ["text_to_video", "first_frame_i2v", "native_audio"],
             "input_modalities": ["text", "image"],
             "adapter_input_modalities": ["text", "image"],
             "duration": {"min": 2, "max": 12, "integer": True, "verified": True},
@@ -296,7 +350,7 @@ class APIProviderMediaService:
                 "https://www.volcengine.com/docs/6492/2165104?lang=zh",
             ],
             "contract_issues": [
-                "Current adapter supports first_frame image-to-video plus ratio, resolution, seed, watermark and generate_audio. Additional multi-image/video roles are not exposed.",
+                "Current adapter supports text-to-video and first-frame image-to-video plus ratio, resolution, seed, watermark and generate_audio. Additional multi-image/video roles are not exposed.",
             ],
         },
         ("seedance", "seedance-1-0-pro"): {
@@ -473,7 +527,9 @@ class APIProviderMediaService:
         reference_image_paths = params.get("reference_image_paths") or []
         reference_video_paths = params.get("reference_video_paths") or []
         has_reference_inputs = bool(reference_image_path or reference_image_paths or reference_video_paths)
-        if not image_path and not first_clip_path and not has_reference_inputs:
+        capabilities = self._video_capabilities(provider, model)
+        supports_text_to_video = "text_to_video" in set(capabilities.get("adapter_ability_types") or [])
+        if not image_path and not first_clip_path and not has_reference_inputs and not supports_text_to_video:
             raise ValueError(
                 "API video models require image_path, first_clip_path, or reference media inputs. "
                 "Use an image template first or pass input image/video/reference media when calling media generation."

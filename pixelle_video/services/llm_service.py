@@ -193,7 +193,8 @@ class LLMService:
                     **kwargs
                 )
                 
-                result = response.choices[0].message.content
+                raw_content = response.choices[0].message.content
+                result = raw_content if isinstance(raw_content, str) else ""
                 logger.debug(f"LLM response length: {len(result)} chars")
                 if not result or not result.strip():
                     logger.warning(
@@ -246,9 +247,14 @@ class LLMService:
             max_tokens=max_tokens,
             **kwargs
         )
-        content = response.choices[0].message.content
+        raw_content = response.choices[0].message.content
+        content = raw_content if isinstance(raw_content, str) else ""
         
         logger.debug(f"Structured output response length: {len(content)} chars")
+        if not content or not content.strip():
+            logger.warning(
+                f"LLM returned empty structured-output content (model={model}, base_url={client.base_url})"
+            )
         
         # Parse JSON from response content
         return self._parse_response_as_model(content, response_type)

@@ -51,12 +51,15 @@ else
     DOCKER_COMPOSE="docker compose"
 fi
 
+# Use the full-stack deployment compose file (includes the web service).
+COMPOSE_FILE="docker-compose.dev.yml"
+
 echo "📦 Building Docker images..."
-$DOCKER_COMPOSE build
+$DOCKER_COMPOSE -f "$COMPOSE_FILE" build
 
 echo ""
 echo "🚀 Starting services..."
-$DOCKER_COMPOSE up -d
+$DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d
 
 echo ""
 echo "⏳ Waiting for services to be ready..."
@@ -76,9 +79,9 @@ echo "  📁 data/templates/  - Custom HTML templates (overrides default)"
 echo "  📁 data/workflows/  - Custom ComfyUI workflows (overrides default)"
 echo ""
 echo "Useful commands:"
-echo "  View logs:    $DOCKER_COMPOSE logs -f"
-echo "  Stop:         $DOCKER_COMPOSE down"
-echo "  Restart:      $DOCKER_COMPOSE restart"
-echo "  Rebuild:      $DOCKER_COMPOSE up -d --build"
+echo "  View logs:    $DOCKER_COMPOSE -f $COMPOSE_FILE logs -f"
+echo "  Stop:         $DOCKER_COMPOSE -f $COMPOSE_FILE down"
+echo "  Restart:      $DOCKER_COMPOSE -f $COMPOSE_FILE restart"
+echo "  Rebuild:      $DOCKER_COMPOSE -f $COMPOSE_FILE up -d --build"
 echo ""
 
